@@ -1,30 +1,39 @@
 #!/usr/bin/env python3
-"""Copy entry.png to the requested output path.
+"""Copy the bundled entry.png to the grader's output directory.
 
-This is the entrypoint for the news-image-20261118 submission: one
-picture summing up Wednesday 18 November 2026 (36 stories). It uses
-only the Python standard library. Run it as:
-
-    python3 main.py [output-path]
-
-With no argument it writes ./entry.png. The copy is byte-for-byte
-identical to the bundled entry.png.
+The entry image lives next to this script in the repo. The grader runs
+this program in a sandbox where the repo is read-only, so the copy must
+go to the output directory named by the MAKEFUN_OUTPUT_DIR environment
+variable (defaulting to /output), never to the current working directory.
+The copy is byte-for-byte, and it is verified twice: its size is checked
+against the source, and the first eight bytes must be the PNG signature.
 """
+
 import os
 import shutil
 import sys
 
 
 def main():
-    here = os.path.dirname(os.path.abspath(__file__))
-    src = os.path.join(here, "entry.png")
-    if not os.path.isfile(src):
-        sys.stderr.write("entry.png not found next to main.py\n")
-        sys.exit(1)
-    dest = sys.argv[1] if len(sys.argv) > 1 else "entry.png"
-    shutil.copyfile(src, dest)
-    print("wrote", dest, os.path.getsize(dest), "bytes")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    src = os.path.join(script_dir, "entry.png")
+    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
+    os.makedirs(out_dir, exist_ok=True)
+    dst = os.path.join(out_dir, "entry.png")
+    shutil.copyfile(src, dst)
+    src_size = os.path.getsize(src)
+    dst_size = os.path.getsize(dst)
+    if dst_size != src_size:
+        print("error: size mismatch after copy: %d != %d" % (dst_size, src_size), file=sys.stderr)
+        return 1
+    with open(dst, "rb") as f:
+        header = f.read(8)
+    if header != b"\x89PNG\r\n\x1a\n":
+        print("error: copied file is not a PNG (bad signature)", file=sys.stderr)
+        return 1
+    print("wrote %s (%d bytes)" % (dst, dst_size))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
